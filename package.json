@@ -1,0 +1,20 @@
+{
+  "name": "pod-bot",
+  "version": "1.0.0",
+  "description": "tcg collection manager discord bot",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node deploy-commands.js && node bot.js"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "csv-parser": "^3.2.0",
+    "discord.js": "^14.18.0",
+    "dotenv": "^16.4.7",
+    "fs": "^0.0.1-security",
+    "mysql": "^2.18.1",
+    "path": "^0.12.7",
+    "uuid": "^11.1.0"
+  }
+}
