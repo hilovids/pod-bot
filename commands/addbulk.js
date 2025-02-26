@@ -82,7 +82,7 @@ module.exports = {
                 if (foilMatch) {
                     isFoil = 1; // Set foil flag
                     card.name = card.name.replace(/\sF$/, ''); // Remove "F" from name
-                    console.log(`✨ Detected Foil: ${card.name}`);
+                    // console.log(`✨ Detected Foil: ${card.name}`);
                 }
             
                 // Check for set code & collector number: "Card Name (SET) 123"
@@ -91,10 +91,11 @@ module.exports = {
                     const setCode = setMatch[1].toLowerCase();
                     const collectorNumber = setMatch[2];
                     scryfallUrl = `https://api.scryfall.com/cards/${setCode}/${collectorNumber}`;
-                    console.log(`🔍 Fetching specific print: ${card.name} [${setCode} - #${collectorNumber}]`);
-                } else {
-                    console.log(`🔍 Fetching default print: ${card.name}`);
-                }
+                    // console.log(`🔍 Fetching specific print: ${card.name} [${setCode} - #${collectorNumber}]`);
+                } 
+                // else {
+                //     console.log(`🔍 Fetching default print: ${card.name}`);
+                // }
             
                 try {
                     const scryfallResponse = await fetch(scryfallUrl);
