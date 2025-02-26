@@ -17,12 +17,13 @@ module.exports = {
             const offset = page * pageSize;
             return await query(
                 `SELECT w.pod_scryfallid, w.pod_oracleid, w.pod_quantity AS wish_quantity, 
-                        i.pod_quantity AS own_quantity, u.pod_userpreferred, u.pod_userid
+                        i.pod_quantity AS own_quantity, u.pod_userpreferred, u.pod_userid,
+                        (w.pod_scryfallid = i.pod_scryfallid) AS is_exact_match
                  FROM pod_wishlist w
                  JOIN pod_inventory i ON w.pod_oracleid = i.pod_oracleid
                  JOIN pod_users u ON w.pod_userid = u.pod_userid
                  WHERE i.pod_userid = ?
-                 ORDER BY w.pod_oracleid = i.pod_oracleid DESC
+                 ORDER BY is_exact_match DESC
                  LIMIT ? OFFSET ?`,
                 [discordUser.id, pageSize, offset]
             );
@@ -59,14 +60,16 @@ module.exports = {
 
         const generateEmbed = (pageData, page) => {
             let description = "";
+
             pageData.forEach(match => {
                 const cardName = cardNames[match.pod_scryfallid] || "Unknown Card";
-                description += `**${cardName}** - <@${match.pod_userid}> wants **${match.wish_quantity}x** (You own ${match.own_quantity}x)\n`;
+                const matchType = match.is_exact_match ? "🔹" : "🔸"; // Blue for exact, orange for similar
+                description += `${matchType} **${cardName}** - <@${match.pod_userid}> wants **${match.wish_quantity}x** (You own ${match.own_quantity}x)\n`;
             });
 
             return new EmbedBuilder()
                 .setColor(0x3498DB)
-                .setTitle(`Cards ${discordUser.username} Owns`)
+                .setTitle(`Wishlisted Cards You Own`)
                 .setDescription(description || "*No matches found on this page.*")
                 .setFooter({ text: `Page ${page + 1}` })
                 .setTimestamp();
