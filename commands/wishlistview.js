@@ -25,7 +25,7 @@ module.exports = {
             );
 
             if (wishlist.length === 0) {
-                return await interaction.editReply({ content: `❌ You have no cards in your wishlist.` });
+                return await interaction.editReply({ content: `❌ ${discordUser.username} has no cards in your wishlist.` });
             }
 
             // Fetch owner details for each card
