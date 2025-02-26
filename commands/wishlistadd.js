@@ -3,7 +3,7 @@ const { query } = require('../utility/db.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('wishlistadd')
+        .setName('wishlistaddcard')
         .setDescription('Manage your wishlist.')
         .addStringOption(option => 
             option.setName('name')
