@@ -151,7 +151,7 @@ module.exports = {
                 .setTimestamp();
 
             if (attachment) {
-                await interaction.editReply({ embeds: [successEmbed], files: [attachment] });
+                await interaction.followUp({ embeds: [successEmbed], files: [attachment] });
 
                 // Schedule deletion of temp file
                 console.log(`🗑️ Deleting temp file: ${tempFilePath}`);
@@ -161,7 +161,7 @@ module.exports = {
                     });
                 }, 30000); // Deletes after 30 seconds
             } else {
-                await interaction.editReply({ embeds: [successEmbed] });
+                await interaction.followUp({ embeds: [successEmbed] });
             }
         } catch (error) {
             console.error('❌ Error processing bulk import:', error);
@@ -171,7 +171,7 @@ module.exports = {
                 .setDescription(`An error occurred while processing your file.`)
                 .setTimestamp();
 
-            await interaction.editReply({ embeds: [errorEmbed] });
+            await interaction.followUp({ embeds: [errorEmbed] });
         }
     }
 };
