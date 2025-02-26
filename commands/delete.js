@@ -12,7 +12,7 @@ module.exports = {
             // Delete user data from related tables first
             await query(`DELETE FROM pod_wishlist WHERE pod_userid = ?;`, [discordUser.id]);
             await query(`DELETE FROM pod_inventory WHERE pod_userid = ?;`, [discordUser.id]);
-            await query(`DELETE FROM pod_users_groups WHERE pod_userid = ?;`, [discordUser.id]);
+            await query(`DELETE FROM pod_usergroups WHERE pod_userid = ?;`, [discordUser.id]);
 
             // Delete user from pod_users
             const result = await query(`DELETE FROM pod_users WHERE pod_userid = ?;`, [discordUser.id]);
