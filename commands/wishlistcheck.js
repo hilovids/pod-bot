@@ -4,116 +4,72 @@ const { query } = require('../utility/db.js');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('wishlistcheck')
-        .setDescription('Check which cards from your wishlist are available from other users.')
-        .addUserOption(option => 
-            option.setName('user')
-                .setDescription('The user whose wishlist you want to check (default: you)')
-                .setRequired(false)
-        )
-        .addStringOption(option => 
-            option.setName('match_type')
-                .setDescription('Filter results by match type')
-                .setRequired(false)
-                .addChoices(
-                    { name: 'Exact', value: 'exact' },
-                    { name: 'Similar', value: 'similar' },
-                    { name: 'Both', value: 'both' }
-                )
-        ),
-    
+        .setDescription('View all cards you own that match other users’ wishlists.'),
     async execute(interaction) {
-        await interaction.deferReply({ ephemeral: false });
+        await interaction.deferReply({ ephemeral: true });
+        console.log(`🔍 Wishlist check initiated by ${interaction.user.username} (${interaction.user.id})`);
 
-        const discordUser = interaction.options.getUser('user') || interaction.user;
-        const userId = discordUser.id;
-        const matchType = interaction.options.getString('match_type') || 'both';
+        const discordUser = interaction.user;
 
         try {
-            // Query the wishlist
-            const wishlist = await query(
-                `SELECT pod_scryfallid, pod_oracleid, pod_quantity 
-                 FROM pod_wishlist 
-                 WHERE pod_userid = ?`, 
-                [userId]
+            // Fetch first matching wishlisted card for each user
+            const matches = await query(
+                `SELECT w.pod_scryfallid, w.pod_oracleid, w.pod_quantity AS wish_quantity, 
+                        i.pod_quantity AS own_quantity, u.pod_userpreferred, u.pod_username
+                 FROM pod_wishlist w
+                 JOIN pod_inventory i ON w.pod_oracleid = i.pod_oracleid
+                 JOIN pod_users u ON w.pod_userid = u.pod_userid
+                 WHERE i.pod_userid = ?
+                 LIMIT 10`, // Adjust TAKE value as needed
+                [discordUser.id] 
             );
 
-            if (wishlist.length === 0) {
-                return await interaction.editReply({ content: `❌ ${discordUser.username} has no cards in their wishlist.` });
+            if (matches.length === 0) {
+                return await interaction.editReply({ content: "❌ No wishlist matches found for your inventory.", ephemeral: true });
             }
 
-            let exactMatches = [];
-            let similarMatches = [];
+            // Use LIMIT 1 (FIRST) for exact matches
+            const exactMatches = await query(
+                `SELECT w.pod_scryfallid, w.pod_oracleid, w.pod_quantity AS wish_quantity, 
+                        i.pod_quantity AS own_quantity, u.pod_userpreferred, u.pod_username
+                 FROM pod_wishlist w
+                 JOIN pod_inventory i ON w.pod_scryfallid = i.pod_scryfallid
+                 JOIN pod_users u ON w.pod_userid = u.pod_userid
+                 WHERE i.pod_userid = ?
+                 LIMIT 1`,
+                [discordUser.id]
+            );
 
-            for (const wish of wishlist) {
-                // Find exact matches (same scryfallid and oracleid)
-                const exactOwners = await query(
-                    `SELECT pod_users.pod_userpreferred, pod_users.pod_username, pod_inventory.pod_quantity
-                     FROM pod_inventory
-                     JOIN pod_users ON pod_inventory.pod_userid = pod_users.pod_userid
-                     WHERE pod_inventory.pod_scryfallid = ? AND pod_inventory.pod_oracleid = ?`,
-                    [wish.pod_scryfallid, wish.pod_oracleid]
-                );
-
-                if (exactOwners.length > 0) {
-                    exactMatches.push({ cardId: wish.pod_scryfallid, owners: exactOwners });
-                }
-
-                // Find similar matches (same oracleid but different scryfallid)
-                const similarOwners = await query(
-                    `SELECT pod_users.pod_userpreferred, pod_users.pod_username, pod_inventory.pod_quantity, pod_inventory.pod_scryfallid
-                     FROM pod_inventory
-                     JOIN pod_users ON pod_inventory.pod_userid = pod_users.pod_userid
-                     WHERE pod_inventory.pod_oracleid = ? AND pod_inventory.pod_scryfallid != ?`,
-                    [wish.pod_oracleid, wish.pod_scryfallid]
-                );
-
-                if (similarOwners.length > 0) {
-                    similarMatches.push({ cardId: wish.pod_scryfallid, owners: similarOwners });
-                }
-            }
-
-            // Format response
-            let responseText = "";
-            if (matchType === "both" || matchType === "exact") {
-                responseText += "**🔹 Exact Matches:**\n";
-                if (exactMatches.length === 0) {
-                    responseText += "_None found._\n";
-                } else {
-                    for (const match of exactMatches) {
-                        responseText += `**• [${match.cardId}](https://scryfall.com/card/${match.cardId})** - Available from:\n`;
-                        for (const owner of match.owners) {
-                            responseText += `  - **${owner.pod_userpreferred}** (@${owner.pod_username}) - ${owner.pod_quantity}x\n`;
-                        }
-                    }
-                }
-            }
-
-            if (matchType === "both" || matchType === "similar") {
-                responseText += "\n**🔸 Similar Matches:**\n";
-                if (similarMatches.length === 0) {
-                    responseText += "_None found._\n";
-                } else {
-                    for (const match of similarMatches) {
-                        responseText += `**• [${match.cardId}](https://scryfall.com/card/${match.cardId})** - Available as different printings from:\n`;
-                        for (const owner of match.owners) {
-                            responseText += `  - **${owner.pod_userpreferred}** (@${owner.pod_username}) - ${owner.pod_quantity}x [${owner.pod_scryfallid}](https://scryfall.com/card/${owner.pod_scryfallid})\n`;
-                        }
-                    }
-                }
-            }
-
-            // Send embed response
-            const embed = new EmbedBuilder()
+            let embed = new EmbedBuilder()
                 .setColor(0x3498DB)
                 .setTitle(`${discordUser.username}'s Wishlist Check`)
-                .setDescription(responseText || "No matches found.")
                 .setTimestamp();
 
-            await interaction.editReply({ embeds: [embed] });
+            let description = "";
 
+            if (exactMatches.length > 0) {
+                description += "**🔹 Exact Matches:**\n";
+                exactMatches.forEach(match => {
+                    description += `• **${match.pod_userpreferred}** (*@${match.pod_username}*) wants **${match.wish_quantity}x** (You own ${match.own_quantity}x)\n`;
+                });
+            } else {
+                description += "**🔹 Exact Matches:**\n*None found.*\n";
+            }
+
+            if (matches.length > 0) {
+                description += "\n**🔸 Similar Matches:**\n";
+                matches.forEach(match => {
+                    description += `• **${match.pod_userpreferred}** (*@${match.pod_username}*) wants **${match.wish_quantity}x** (You own ${match.own_quantity}x, different print)\n`;
+                });
+            } else {
+                description += "\n**🔸 Similar Matches:**\n*None found.*\n";
+            }
+
+            embed.setDescription(description);
+            await interaction.editReply({ embeds: [embed] });
         } catch (error) {
-            console.error('Error fetching wishlist check:', error);
-            await interaction.editReply({ content: "❌ An error occurred while fetching wishlist matches." });
+            console.error('❌ Error checking wishlist:', error);
+            await interaction.editReply({ content: "❌ An error occurred while checking wishlists.", ephemeral: true });
         }
     }
 };
