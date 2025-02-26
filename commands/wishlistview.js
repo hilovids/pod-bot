@@ -4,11 +4,16 @@ const { query } = require('../utility/db.js');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('wishlistview')
-        .setDescription('View your wishlist and who owns each card.'),
+        .setDescription('View your wishlist and who owns each card.')
+        .addUserOption(option => 
+            option.setName('user')
+                .setDescription('The user whose wishlist you want to view (default: you)')
+                .setRequired(false)
+        ),
     async execute(interaction) {
         await interaction.deferReply({ ephemeral: false });
 
-        const discordUser = interaction.user;
+        const discordUser = interaction.options.getUser('user') || interaction.user;
         const userId = discordUser.id;
 
         try {
