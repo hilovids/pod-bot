@@ -12,16 +12,15 @@ module.exports = {
         const discordUser = interaction.user;
         const pageSize = 10; // Number of results per page
 
-        // Function to fetch paginated results
+        // Function to fetch paginated wishlist matches
         const fetchPage = async (page) => {
             const offset = page * pageSize;
             return await query(
                 `SELECT w.pod_scryfallid, w.pod_oracleid, w.pod_quantity AS wish_quantity, 
-                        i.pod_quantity AS own_quantity, u.pod_userpreferred, u.pod_userid, s.name AS card_name
+                        i.pod_quantity AS own_quantity, u.pod_userpreferred, u.pod_userid
                  FROM pod_wishlist w
                  JOIN pod_inventory i ON w.pod_oracleid = i.pod_oracleid
                  JOIN pod_users u ON w.pod_userid = u.pod_userid
-                 JOIN scryfall_cards s ON w.pod_scryfallid = s.pod_scryfallid
                  WHERE i.pod_userid = ?
                  ORDER BY w.pod_oracleid = i.pod_oracleid DESC
                  LIMIT ? OFFSET ?`,
@@ -36,10 +35,33 @@ module.exports = {
             return await interaction.editReply({ content: "❌ No wishlist matches found for your inventory." });
         }
 
+        // Function to fetch card names from Scryfall API
+        const fetchCardNames = async (matches) => {
+            const cardData = {};
+            for (const match of matches) {
+                try {
+                    const response = await fetch(`https://api.scryfall.com/cards/${match.pod_scryfallid}`);
+                    if (response.ok) {
+                        const card = await response.json();
+                        cardData[match.pod_scryfallid] = card.name;
+                    } else {
+                        cardData[match.pod_scryfallid] = "Unknown Card";
+                    }
+                } catch (error) {
+                    console.error(`❌ Scryfall API error for card ID ${match.pod_scryfallid}:`, error);
+                    cardData[match.pod_scryfallid] = "Unknown Card";
+                }
+            }
+            return cardData;
+        };
+
+        const cardNames = await fetchCardNames(matches);
+
         const generateEmbed = (pageData, page) => {
             let description = "";
             pageData.forEach(match => {
-                description += `**${match.card_name}** - <@${match.pod_userid}> wants **${match.wish_quantity}x** (You own ${match.own_quantity}x)\n`;
+                const cardName = cardNames[match.pod_scryfallid] || "Unknown Card";
+                description += `**${cardName}** - <@${match.pod_userid}> wants **${match.wish_quantity}x** (You own ${match.own_quantity}x)\n`;
             });
 
             return new EmbedBuilder()
@@ -70,6 +92,7 @@ module.exports = {
                 matches = nextPage;
             }
 
+            const updatedCardNames = await fetchCardNames(matches);
             await message.edit({ embeds: [generateEmbed(matches, currentPage)] });
             reaction.users.remove(interaction.user.id);
         });
