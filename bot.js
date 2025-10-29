@@ -3,8 +3,12 @@ const path = require('path');
 const dotenv = require('dotenv').config();
 const { Client, Collection, GatewayIntentBits, MessageFlags } = require('discord.js');
 
+
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMessageReactions] });
 client.commands = new Collection();
+
+// Archipelago persistent manager
+const archipelago = require('./utility/archipelago');
 
 // Function to recursively find all .js files in a directory
 function getJsFiles(dir) {
@@ -85,5 +89,12 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
+
+
+client.once('ready', async () => {
+    console.log(`Logged in as ${client.user.tag}`);
+    // Load persistent Archipelago rooms
+    await archipelago.loadArchipelagoRooms(client);
+});
 
 client.login(process.env.DISCORD_TOKEN);
