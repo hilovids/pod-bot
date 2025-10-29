@@ -102,17 +102,41 @@ async function connectArchipelagoRoom(port, channelId, slotName, discordClient) 
     const apClient = new Client();
     console.log(`[AP] Connecting to Archipelago server on port ${port} as slot [${slotName}]`);
     // Listen for item/hint events
+    // Flood prevention for itemsReceived
+    let itemFloodBuffer = [];
+    let itemFloodTimeout = null;
     apClient.items.on('itemsReceived', async (items) => {
-        const channel = await getTextChannel(discordClient, channelId);
-        if (!channel) return;
-        for (const item of items) {
-            const embed = {
-                title: 'Item Received',
-                description: `**Item:** ${item.itemName || item.item || 'Unknown'}\n**From:** ${item.fromPlayerName || item.fromPlayer || 'Unknown'}\n**Index:** ${item.index || ''}`,
-                color: 0x00ff00,
-                timestamp: new Date().toISOString(),
-            };
-            channel.send({ embeds: [embed] });
+        itemFloodBuffer.push(...items);
+        if (!itemFloodTimeout) {
+            itemFloodTimeout = setTimeout(async () => {
+                const channel = await getTextChannel(discordClient, channelId);
+                if (!channel) {
+                    itemFloodBuffer = [];
+                    itemFloodTimeout = null;
+                    return;
+                }
+                if (itemFloodBuffer.length > 10) {
+                    const embed = {
+                        title: 'Many Items Received',
+                        description: `Received ${itemFloodBuffer.length} items in a short period.`,
+                        color: 0x00ff00,
+                        timestamp: new Date().toISOString(),
+                    };
+                    await channel.send({ embeds: [embed] });
+                } else {
+                    for (const item of itemFloodBuffer) {
+                        const embed = {
+                            title: 'Item Received',
+                            description: `**Item:** ${item.itemName || item.item || 'Unknown'}\n**From:** ${item.fromPlayerName || item.fromPlayer || 'Unknown'}\n**Index:** ${item.index || ''}`,
+                            color: 0x00ff00,
+                            timestamp: new Date().toISOString(),
+                        };
+                        await channel.send({ embeds: [embed] });
+                    }
+                }
+                itemFloodBuffer = [];
+                itemFloodTimeout = null;
+            }, 5000);
         }
     });
 
