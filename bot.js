@@ -68,23 +68,17 @@ client.on('interactionCreate', async interaction => {
     const command = client.commands.get(interaction.commandName);
 
     // Log command details
-    console.log(`🔹 Command Received: /${interaction.commandName}`);
-    console.log(`   👤 User: ${interaction.user.username} (${interaction.user.id})`);
-    if (interaction.guild) {
-        console.log(`   🏠 Guild: ${interaction.guild.name} (${interaction.guild.id})`);
-    } else {
-        console.log(`   📬 DM Interaction`);
-    }
+    console.log(`[SYSTEM] Command Received: /${interaction.commandName} from ${interaction.user.username} (${interaction.user.id})`);
 
     if (!command) {
-        console.log(`⚠️ Command not found: /${interaction.commandName}`);
+        console.warn(`[SYSTEM] Command not found: /${interaction.commandName}`);
         return;
     }
 
     try {
         await command.execute(interaction);
     } catch (error) {
-        console.error(`❌ Error executing /${interaction.commandName}:`, error);
+        console.error(`[SYSTEM] Error executing /${interaction.commandName}:`, error);
         await interaction.reply({ content: "An error occurred while executing this command.", flags: MessageFlags.Ephemeral });
     }
 });
@@ -92,7 +86,7 @@ client.on('interactionCreate', async interaction => {
 
 
 client.once('ready', async () => {
-    console.log(`Logged in as ${client.user.tag}`);
+    console.log(`[SYSTEM] Logged in as ${client.user.tag}`);
     // Load persistent Archipelago rooms
     await archipelago.loadArchipelagoRooms(client);
 });

@@ -89,7 +89,7 @@ async function getTextChannel(discordClient, channelId) {
         try {
             channel = await discordClient.channels.fetch(channelId);
         } catch (e) {
-            console.error(`Could not fetch channel ${channelId}:`, e);
+            console.error(`[AP] Could not fetch channel ${channelId}:`, e);
             return null;
         }
     }
@@ -207,7 +207,7 @@ async function connectArchipelagoRoom(port, channelId, slotName, discordClient) 
     apClient.login(`archipelago.gg:${port}`, slotName)
         .then(async () => {
             const channel = await getTextChannel(discordClient, channelId);
-            if (channel) channel.send({ content: `Connected to Archipelago server as [${slotName}] on port ${port}` });
+            if (channel) channel.send({ content: `Currently pretending to be [${slotName}] on port ${port}` });
             console.log(`[AP] Botsquatch connected to Archipelago server as [${slotName}] on port ${port}`);
         })
         .catch(async (err) => {
@@ -225,7 +225,7 @@ async function getTextChannel(discordClient, channelId) {
         try {
             channel = await discordClient.channels.fetch(channelId);
         } catch (e) {
-            console.error(`Could not fetch channel ${channelId}:`, e);
+            console.error(`[AP] Could not fetch channel ${channelId}:`, e);
             return null;
         }
     }
