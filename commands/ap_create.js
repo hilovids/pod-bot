@@ -1,5 +1,6 @@
 
 const { SlashCommandBuilder, ChannelType, PermissionFlagsBits } = require('discord.js');
+const { connectArchipelagoRoom } = require('../utility/archipelago.js');
 const db = require('../utility/db');
 
 module.exports = {
@@ -45,6 +46,9 @@ module.exports = {
             [port, channel.id, slotName]
         );
 
-        await interaction.reply({ content: `Channel <#${channel.name}> created and registered for Archipelago game ${port}.`, ephemeral: true });
+        await interaction.reply({ content: `Channel #${channel.name} created and registered for Archipelago game ${port}.`, ephemeral: true });
+
+        // Connect to the Archipelago room
+        await connectArchipelagoRoom(port, channel.id, slotName, interaction.client);
     },
 };

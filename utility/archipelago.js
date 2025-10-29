@@ -11,7 +11,11 @@ async function getTextChannel(discordClient, channelId) {
     }
     return channel;
 }
-const { Client } = require('archipelago.js');
+let Client;
+(async () => {
+  ({ Client } = await import('archipelago.js'));
+})();
+
 const db = require('../utility/db');
 
 // In-memory map: gameId -> { client, channelId }
