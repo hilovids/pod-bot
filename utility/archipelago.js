@@ -1,3 +1,13 @@
+let Client;
+(async () => {
+  ({ Client } = await import('archipelago.js'));
+})();
+
+const db = require('../utility/db');
+
+// In-memory map: gameId -> { client, channelId }
+const archipelagoGames = new Map();
+
 // Helper to always get a text channel, even if not cached
 async function getTextChannel(discordClient, channelId) {
     let channel = discordClient.channels.cache.get(channelId);
@@ -11,16 +21,6 @@ async function getTextChannel(discordClient, channelId) {
     }
     return channel;
 }
-let Client;
-(async () => {
-  ({ Client } = await import('archipelago.js'));
-})();
-
-const db = require('../utility/db');
-
-// In-memory map: gameId -> { client, channelId }
-const archipelagoGames = new Map();
-
 
 async function loadArchipelagoRooms(discordClient) {
     // Load all registered rooms from DB
@@ -34,7 +34,7 @@ async function loadArchipelagoRooms(discordClient) {
 async function connectArchipelagoRoom(port, channelId, slotName, discordClient) {
     if (archipelagoGames.has(slotName)) return; // Already connected
     const apClient = new Client();
-
+    console.log(`[AP] Connecting to Archipelago server on port ${port} as slot [${slotName}]`);
     // Listen for item/hint events
     apClient.items.on('itemsReceived', async (items) => {
         const channel = await getTextChannel(discordClient, channelId);
