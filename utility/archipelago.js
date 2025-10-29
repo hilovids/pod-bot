@@ -1,3 +1,11 @@
+if (typeof global.WebSocket === 'undefined') {
+  global.WebSocket = require('ws');
+}
+
+if (typeof global.navigator === 'undefined') {
+  global.navigator = { userAgent: 'node.js' };
+}
+
 // Helper to get player count for a given port and slot
 async function getPlayerCount(port, slotName) {
     if (!Client) {
@@ -27,7 +35,7 @@ const db = require('../utility/db');
 const archipelagoGames = new Map();
 
 // Listen for goal events and update DB
-async function handleGoalAchieved(channelId, slotName, discordClient) {
+async function handleGoalAchieved(channelId, slotName, discordClient, released = false) {
     // Increment finished_count for this room
     await db.query('UPDATE archipelago_rooms SET finished_count = finished_count + 1 WHERE channel_id = ?', [channelId]);
     // Get updated counts
@@ -39,9 +47,9 @@ async function handleGoalAchieved(channelId, slotName, discordClient) {
     if (channel) {
         channel.send({
             embeds: [{
-                title: 'Goal Achieved!',
-                description: `${slotName} has finished their game!\n${remaining} player(s) still need to finish.`,
-                color: 0xFFD700,
+                title: released ? 'Game Released' : 'Goal Achieved!',
+                description: `${slotName} has ${released ? 'released' : 'finished'} their game!\n${remaining} player(s) still need to finish.`,
+                color: released ? 0x260c9bff : 0xFFD700,
                 timestamp: new Date().toISOString(),
             }]
         });
@@ -103,11 +111,16 @@ async function connectArchipelagoRoom(port, channelId, slotName, discordClient) 
     console.log(`[AP] Connecting to Archipelago server on port ${port} as slot [${slotName}]`);
     // Listen for item/hint events
     // Flood prevention for itemsReceived
-    let itemFloodBuffer = [];
-    let itemFloodTimeout = null;
-    apClient.items.on('itemsReceived', async (items) => {
-        itemFloodBuffer.push(...items);
-        if (!itemFloodTimeout) {
+        let ignoreItemsUntil = Date.now() + 10000; // Ignore itemsReceived for 10 seconds after connect
+        let itemFloodBuffer = [];
+        let itemFloodTimeout = null;
+        apClient.items.on('itemsReceived', async (items) => {
+            if (Date.now() < ignoreItemsUntil) return; // Ignore during initial window
+            console.log(items);
+            itemFloodBuffer.push(...items);
+            if (itemFloodTimeout) {
+                clearTimeout(itemFloodTimeout);
+            }
             itemFloodTimeout = setTimeout(async () => {
                 const channel = await getTextChannel(discordClient, channelId);
                 if (!channel) {
@@ -119,16 +132,18 @@ async function connectArchipelagoRoom(port, channelId, slotName, discordClient) 
                     const embed = {
                         title: 'Many Items Received',
                         description: `Received ${itemFloodBuffer.length} items in a short period.`,
-                        color: 0x00ff00,
+                        color: 0xffcd42,
                         timestamp: new Date().toISOString(),
                     };
                     await channel.send({ embeds: [embed] });
                 } else {
+                    console.log(itemFloodBuffer);
                     for (const item of itemFloodBuffer) {
+                        console.log(item);
                         const embed = {
                             title: 'Item Received',
-                            description: `**Item:** ${item.itemName || item.item || 'Unknown'}\n**From:** ${item.fromPlayerName || item.fromPlayer || 'Unknown'}\n**Index:** ${item.index || ''}`,
-                            color: 0x00ff00,
+                            description: `**Item:** ${item.name || 'Unknown'}\n**From:** ${item.sender || 'Unknown'}\n**Receiver:** ${item.receiver || ''}`,
+                            color: 0x5bfc32,
                             timestamp: new Date().toISOString(),
                         };
                         await channel.send({ embeds: [embed] });
@@ -136,8 +151,7 @@ async function connectArchipelagoRoom(port, channelId, slotName, discordClient) 
                 }
                 itemFloodBuffer = [];
                 itemFloodTimeout = null;
-            }, 5000);
-        }
+            }, 5000); // Wait 5s after last item before sending
     });
 
     apClient.items.on('hintReceived', async (hint) => {
@@ -145,8 +159,8 @@ async function connectArchipelagoRoom(port, channelId, slotName, discordClient) 
         if (!channel) return;
         const embed = {
             title: 'Hint Received',
-            description: `**Hint:** ${hint.hint || JSON.stringify(hint)}`,
-            color: 0x0099ff,
+            description: `**Hint:** ${hint.item} at entrance [${hint.entrance}]`,
+            color: 0xa940ffff,
             timestamp: new Date().toISOString(),
         };
         channel.send({ embeds: [embed] });
@@ -157,8 +171,8 @@ async function connectArchipelagoRoom(port, channelId, slotName, discordClient) 
         if (!channel) return;
         const embed = {
             title: 'Hint Found',
-            description: `**Hint:** ${hint.hint || JSON.stringify(hint)}`,
-            color: 0x0099ff,
+                description: `**Hint:** ${hint.item} at entrance [${hint.entrance}]`,
+            color: 0xa940ffff,
             timestamp: new Date().toISOString(),
         };
         channel.send({ embeds: [embed] });
@@ -171,7 +185,7 @@ async function connectArchipelagoRoom(port, channelId, slotName, discordClient) 
         const embed = {
             title: 'DeathLink Triggered',
             description: `**Source:** ${death.source || 'Unknown'}\n**Cause:** ${death.cause || 'Unknown'}\n**Time:** ${death.time ? new Date(death.time * 1000).toLocaleString() : 'Unknown'}`,
-            color: 0xff0000,
+            color: 0x3b0909ff,
             timestamp: new Date().toISOString(),
         };
         channel.send({ embeds: [embed] });
@@ -181,6 +195,12 @@ async function connectArchipelagoRoom(port, channelId, slotName, discordClient) 
         const channel = await getTextChannel(discordClient, channelId);
         if (!channel) return;
         await handleGoalAchieved(channelId, slotName, discordClient);
+    });
+
+        apClient.messages.on('released', async () => {
+        const channel = await getTextChannel(discordClient, channelId);
+        if (!channel) return;
+        await handleGoalAchieved(channelId, slotName, discordClient, true);
     });
 
     // Login to the server
