@@ -40,13 +40,17 @@ module.exports = {
             ],
         });
 
+        // Get player count from Archipelago
+        const { getPlayerCount } = require('../utility/archipelago.js');
+        const playerCount = await getPlayerCount(port, slotName);
+
         // Register the room in the DB for persistent connection
         await db.query(
-            'INSERT INTO archipelago_rooms (port_id, channel_id, slot_name) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE channel_id = VALUES(channel_id)',
-            [port, channel.id, slotName]
+            'INSERT INTO archipelago_rooms (port_id, channel_id, slot_name, player_count, finished_count) VALUES (?, ?, ?, ?, 0) ON DUPLICATE KEY UPDATE channel_id = VALUES(channel_id), player_count = VALUES(player_count)',
+            [port, channel.id, slotName, playerCount]
         );
 
-        await interaction.reply({ content: `Channel #${channel.name} created and registered for Archipelago game ${port}.`, ephemeral: true });
+        await interaction.reply({ content: `Channel #${channel.name} created and registered for Archipelago game ${port} with ${playerCount} player(s).`, ephemeral: true });
 
         // Connect to the Archipelago room
         await connectArchipelagoRoom(port, channel.id, slotName, interaction.client);

@@ -1,12 +1,78 @@
+// Helper to get player count for a given port and slot
+async function getPlayerCount(port, slotName) {
+    if (!Client) {
+        ({ Client } = await import('archipelago.js'));
+    }
+    const apClient = new Client();
+    try {
+        await apClient.login(`archipelago.gg:${port}`, slotName);
+        // slots is a getter, so access as property
+        const slots = apClient.players.slots;
+        return slots ? Object.keys(slots).length : 0;
+    } catch (e) {
+        console.error(`[AP] Could not get player count for port ${port}, slot ${slotName}:`, e);
+        return 0;
+    } finally {
+        apClient.disconnect && apClient.disconnect();
+    }
+}
 let Client;
 (async () => {
-  ({ Client } = await import('archipelago.js'));
+    ({ Client } = await import('archipelago.js'));
 })();
 
 const db = require('../utility/db');
 
 // In-memory map: gameId -> { client, channelId }
 const archipelagoGames = new Map();
+
+// Listen for goal events and update DB
+async function handleGoalAchieved(channelId, slotName, discordClient) {
+    // Increment finished_count for this room
+    await db.query('UPDATE archipelago_rooms SET finished_count = finished_count + 1 WHERE channel_id = ?', [channelId]);
+    // Get updated counts
+    const rows = await db.query('SELECT * FROM archipelago_rooms WHERE channel_id = ?', [channelId]);
+    if (!rows.length) return;
+    const { player_count, finished_count } = rows[0];
+    const remaining = Math.max(0, (player_count || 0) - (finished_count || 0));
+    const channel = await getTextChannel(discordClient, channelId);
+    if (channel) {
+        channel.send({
+            embeds: [{
+                title: 'Goal Achieved!',
+                description: `${slotName} has finished their game!\n${remaining} player(s) still need to finish.`,
+                color: 0xFFD700,
+                timestamp: new Date().toISOString(),
+            }]
+        });
+    }
+    // If all players finished, archive channel and DB entry
+    if (player_count && finished_count && finished_count >= player_count) {
+        // Move channel to archive category
+        const archiveCategoryId = process.env.AP_ARCHIVE_CATEGORY_ID;
+        if (channel && archiveCategoryId) {
+            try {
+                await channel.setParent(archiveCategoryId);
+            } catch (e) {
+                console.error('Failed to move channel to archive category:', e);
+            }
+        }
+        // Move DB entry to archive table
+        await db.query('INSERT INTO archipelago_rooms_archive SELECT * FROM archipelago_rooms WHERE channel_id = ?', [channelId]);
+        await db.query('DELETE FROM archipelago_rooms WHERE channel_id = ?', [channelId]);
+        // Remove listeners and client
+        for (const [slot, obj] of archipelagoGames.entries()) {
+            if (obj.channelId === channelId) {
+                if (obj.client && obj.client.removeAllListeners) obj.client.removeAllListeners();
+                if (obj.client && obj.client.disconnect) obj.client.disconnect();
+                archipelagoGames.delete(slot);
+            }
+        }
+        if (channel) {
+            channel.send({ content: 'All players have finished! This channel has been archived.' });
+        }
+    }
+}
 
 // Helper to always get a text channel, even if not cached
 async function getTextChannel(discordClient, channelId) {
@@ -87,6 +153,12 @@ async function connectArchipelagoRoom(port, channelId, slotName, discordClient) 
         channel.send({ embeds: [embed] });
     });
 
+    apClient.messages.on('goaled', async () => {
+        const channel = await getTextChannel(discordClient, channelId);
+        if (!channel) return;
+        await handleGoalAchieved(channelId, slotName, discordClient);
+    });
+
     // Login to the server
     apClient.login(`archipelago.gg:${port}`, slotName)
         .then(async () => {
@@ -116,4 +188,4 @@ async function getTextChannel(discordClient, channelId) {
     return channel;
 }
 
-module.exports = { loadArchipelagoRooms, connectArchipelagoRoom, archipelagoGames };
+module.exports = { loadArchipelagoRooms, connectArchipelagoRoom, archipelagoGames, getPlayerCount };
